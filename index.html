@@ -281,7 +281,7 @@ ${text}`;
 
     if (!res.ok) throw new Error(data.error?.message || 'API error');
 
-    const raw = data.content.map(b => b.text || '').join('').replace(/```json|```/g, '').trim();
+    const raw = data.choices[0].message.content.replace(/```json|```/g, '').trim();
     const issues = JSON.parse(raw);
 
     renderResults(issues);
