@@ -269,11 +269,7 @@ ${text}`;
     const res = await fetch('/api/proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ prompt })
     });
 
     const data = await res.json();
@@ -288,7 +284,7 @@ ${text}`;
     results.classList.add('active');
   } catch (err) {
     clearInterval(interval);
-    errorMsg.textContent = 'Analysis failed: ' + err.message + '. Make sure you are running this via a server that proxies the Anthropic API key.';
+    errorMsg.textContent = 'Analysis failed: ' + err.message + '. Make sure you are running this via a server that proxies the Groq API key.';
     errorMsg.classList.add('active');
   } finally {
     loading.classList.remove('active');
