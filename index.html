@@ -314,6 +314,87 @@ function exportCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'infrastructure_priorities.csv'; a.click();
 }
 
+const RG_PROMPTS = {
+  council: `You are a senior municipal infrastructure analyst preparing a formal council presentation. Your audience is elected officials and city administrators. Write in a professional, formal tone. Be data-driven and include clear recommendations. Structure the report with an executive summary, key findings, risk assessment, and recommended actions.`,
+  grant: `You are a grant writer specializing in municipal infrastructure funding. Your audience is federal and state grant reviewers. Write in a persuasive, compelling tone. Emphasize community impact, equity, compliance needs, and cost-benefit analysis. Structure the report to meet grant application standards: project overview, community need, project description, expected outcomes, and budget justification.`,
+  budget: `You are a public works budget analyst preparing internal budget justification documentation. Your audience is budget officers and department heads. Write in a metrics-forward, ROI-focused tone. Quantify the risk of inaction, highlight lifecycle cost savings, and use departmental language. Structure the report with: current conditions summary, cost of deferred maintenance, proposed investment, projected ROI, and risk mitigation.`,
+  public: `You are a public communications officer for a city government. Your audience is residents and the general public. Write at an 8th grade reading level. Use plain, simple language. Be empathetic, transparent, and focus on improvements residents will see and feel. Avoid technical jargon. Structure the report with: what's happening, why it matters to you, what we're doing about it, and what to expect.`
+};
+
+const RG_LABELS = {
+  council: 'Council Presentation',
+  grant: 'Grant Application',
+  budget: 'Budget Justification',
+  public: 'Public Communication'
+};
+
+async function generateReport() {
+  const text = document.getElementById('rgData').value.trim();
+  if (!text) {
+    const e = document.getElementById('rgErrorMsg');
+    e.textContent = 'Please paste infrastructure data before generating a report.';
+    e.classList.add('active');
+    return;
+  }
+
+  const btn = document.getElementById('rgBtn');
+  const loading = document.getElementById('rgLoading');
+  const results = document.getElementById('rgResults');
+  const errorMsg = document.getElementById('rgErrorMsg');
+
+  btn.disabled = true;
+  loading.classList.add('active');
+  results.classList.remove('active');
+  errorMsg.classList.remove('active');
+
+  const loadingTexts = ['Generating report...', 'Drafting sections...', 'Formatting output...'];
+  let li = 0;
+  const interval = setInterval(() => {
+    li = (li + 1) % loadingTexts.length;
+    document.getElementById('rgLoadingText').textContent = loadingTexts[li];
+  }, 1800);
+
+  const systemContext = RG_PROMPTS[rgType] || RG_PROMPTS.council;
+  const prompt = `${systemContext}
+
+Using the infrastructure data below, generate a complete, well-structured report.
+
+Format requirements:
+- Use ## to mark major section headings (these will be rendered as headings)
+- Use bullet points starting with "- " for lists
+- Write full paragraphs where narrative is needed
+- Do NOT use markdown bold (**text**) — just write plainly
+- Include a summary paragraph at the end
+
+Infrastructure Data:
+${text}`;
+
+  try {
+    const res = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    const data = await res.json();
+    clearInterval(interval);
+
+    if (!res.ok) throw new Error(data.error?.message || 'API error');
+
+    const raw = data.choices[0].message.content;
+    rgPlainText = raw;
+    renderReport(raw);
+    results.classList.add('active');
+  } catch (err) {
+    clearInterval(interval);
+    errorMsg.textContent = 'Report generation failed: ' + err.message;
+    errorMsg.classList.add('active');
+  } finally {
+    loading.classList.remove('active');
+    btn.disabled = false;
+  }
+}
+
 async function analyze() {
   const text = document.getElementById('input').value.trim();
   if (!text) return;
