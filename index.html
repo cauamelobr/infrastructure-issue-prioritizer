@@ -314,6 +314,60 @@ function exportCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'infrastructure_priorities.csv'; a.click();
 }
 
+function renderReport(text) {
+  // Convert markdown-style ## headings to <h3>, - bullets to <ul><li>, paragraphs to <p>
+  const lines = text.split('\n');
+  let html = '';
+  let inList = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('## ')) {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<h3>${escapeHtml(trimmed.slice(3))}</h3>`;
+    } else if (trimmed.startsWith('- ')) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${escapeHtml(trimmed.slice(2))}</li>`;
+    } else if (trimmed === '') {
+      if (inList) { html += '</ul>'; inList = false; }
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<p>${escapeHtml(trimmed)}</p>`;
+    }
+  }
+  if (inList) html += '</ul>';
+
+  document.getElementById('rgOutput').innerHTML = html;
+  document.getElementById('rgResultsLabel').textContent = `${RG_LABELS[rgType] || 'Report'} generated`;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function copyReport() {
+  if (!rgPlainText) return;
+  navigator.clipboard.writeText(rgPlainText).then(() => {
+    const btn = document.querySelector('.rg-actions .btn-secondary');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1800);
+  }).catch(() => {
+    alert('Copy failed. Please select and copy the text manually.');
+  });
+}
+
+function downloadReport() {
+  if (!rgPlainText) return;
+  const blob = new Blob([rgPlainText], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `infrastructure_report_${rgType}_${Date.now()}.txt`;
+  a.click();
+}
+
 const RG_PROMPTS = {
   council: `You are a senior municipal infrastructure analyst preparing a formal council presentation. Your audience is elected officials and city administrators. Write in a professional, formal tone. Be data-driven and include clear recommendations. Structure the report with an executive summary, key findings, risk assessment, and recommended actions.`,
   grant: `You are a grant writer specializing in municipal infrastructure funding. Your audience is federal and state grant reviewers. Write in a persuasive, compelling tone. Emphasize community impact, equity, compliance needs, and cost-benefit analysis. Structure the report to meet grant application standards: project overview, community need, project description, expected outcomes, and budget justification.`,
