@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Infrastructure Issue Prioritizer</title>
 <style>
+/* --- Button Group --- */
+.btn-group { display: flex; gap: 0; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); overflow: hidden; width: fit-content; }
+.btn-group-item { background: transparent; border: none; border-right: 0.5px solid var(--color-border-secondary); padding: 7px 16px; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; font-family: var(--font-sans); transition: background 0.12s, color 0.12s; }
+.btn-group-item:last-child { border-right: none; }
+.btn-group-item:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+.btn-group-item.active { background: var(--color-text-primary); color: var(--color-background-primary); }
+.form-field { margin-bottom: 1rem; }
+.form-label { display: block; font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 6px; }
+.form-label-sub { font-size: 12px; color: var(--color-text-secondary); font-weight: 400; margin-left: 4px; }
+input[type="number"], input[type="text"] { width: 100%; font-size: 14px; padding: 9px 12px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); font-family: var(--font-sans); }
+input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: #378ADD; box-shadow: 0 0 0 2px rgba(55,138,221,0.12); }
+input[type="number"]::placeholder, input[type="text"]::placeholder { color: var(--color-text-tertiary); }
+/* --- Capital Planning Output --- */
+.cp-table-wrap { overflow-x: auto; margin-bottom: 1.25rem; }
+.cp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-table th { background: var(--color-background-secondary); color: var(--color-text-secondary); font-weight: 500; text-align: left; padding: 8px 12px; border-bottom: 0.5px solid var(--color-border-secondary); }
+.cp-table td { padding: 10px 12px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); vertical-align: top; }
+.cp-table tr:last-child td { border-bottom: none; }
+.cp-scenarios { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+@media (max-width: 540px) { .cp-scenarios { grid-template-columns: 1fr; } }
+.cp-scenario-card { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+.cp-scenario-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+.cp-scenario-cost { font-size: 22px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+.cp-scenario-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 6px; }
+.cp-scenario-outcomes { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+.cp-narrative { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px 16px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
+.cp-section-label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
 /* --- Tab Navigation --- */
 .tab-nav { display: flex; gap: 2px; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--color-border-tertiary); padding-bottom: 0; }
 .tab-btn { background: transparent; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; font-family: var(--font-sans); margin-bottom: -0.5px; transition: color 0.15s; }
@@ -145,7 +172,64 @@ textarea::placeholder { color: var(--color-text-tertiary); }
   </div><!-- end #tab-prioritizer -->
 
   <div id="tab-capital-planning" class="tab-panel">
-    <!-- Capital Planning module will be added here -->
+
+    <div class="form-field">
+      <label class="form-label" for="cpIssues">Infrastructure Issues <span class="form-label-sub">— paste issues or use analyzed results above</span></label>
+      <textarea id="cpIssues" placeholder="Paste infrastructure issues or copy the analyzed results from the Issue Prioritizer tab..."></textarea>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">Planning Horizon</label>
+      <div class="btn-group" id="cpHorizonGroup">
+        <button class="btn-group-item active" onclick="setCpHorizon(3, this)">3 years</button>
+        <button class="btn-group-item" onclick="setCpHorizon(5, this)">5 years</button>
+        <button class="btn-group-item" onclick="setCpHorizon(10, this)">10 years</button>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label" for="cpBudget">Annual Budget Cap ($)</label>
+      <input type="number" id="cpBudget" placeholder="e.g. 500000" min="0" step="10000">
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" id="cpBtn" onclick="generateCapitalPlan()">Generate Capital Plan</button>
+    </div>
+
+    <div class="loading" id="cpLoading">
+      <div class="spinner"></div>
+      <span id="cpLoadingText">Forecasting asset deterioration...</span>
+    </div>
+
+    <div class="error-msg" id="cpErrorMsg"></div>
+
+    <div class="results" id="cpResults">
+      <div class="results-header">
+        <span id="cpResultsLabel"></span>
+      </div>
+
+      <div class="cp-section-label">Year-by-Year Capital Plan</div>
+      <div class="cp-table-wrap">
+        <table class="cp-table" id="cpTable">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Priority Issues</th>
+              <th>Budget Allocated</th>
+              <th>Rationale</th>
+            </tr>
+          </thead>
+          <tbody id="cpTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="cp-section-label">Scenario Comparison</div>
+      <div class="cp-scenarios" id="cpScenarios"></div>
+
+      <div class="cp-section-label">Narrative Justification</div>
+      <div class="cp-narrative" id="cpNarrative"></div>
+    </div>
+
   </div>
 
   <div class="footer">
@@ -171,6 +255,13 @@ const EXAMPLES = `- Large pothole on Main St near downtown causing flat tires da
 - Guardrail missing on curve on Highway 7 near mile marker 14`;
 
 let lastResults = [];
+let cpHorizon = 3;
+
+function setCpHorizon(years, btn) {
+  cpHorizon = years;
+  document.querySelectorAll('#cpHorizonGroup .btn-group-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
 
 function loadExample() {
   document.getElementById('input').value = EXAMPLES;
