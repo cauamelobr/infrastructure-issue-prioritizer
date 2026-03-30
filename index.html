@@ -344,6 +344,52 @@ function exportCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'infrastructure_priorities.csv'; a.click();
 }
 
+function renderCapitalPlan(plan) {
+  // Year-by-year table
+  const tbody = document.getElementById('cpTableBody');
+  if (plan.years && Array.isArray(plan.years)) {
+    tbody.innerHTML = plan.years.map(row => `
+      <tr>
+        <td><strong>Year ${row.year}</strong></td>
+        <td>${row.issues || ''}</td>
+        <td>${row.budget_allocated || ''}</td>
+        <td>${row.rationale || ''}</td>
+      </tr>`).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-tertiary)">No year data returned.</td></tr>';
+  }
+
+  // Scenario comparison cards
+  const scenDiv = document.getElementById('cpScenarios');
+  if (plan.scenarios) {
+    const sq = plan.scenarios.status_quo || {};
+    const opt = plan.scenarios.optimized || {};
+    const renderOutcomes = (str) => (str || '').split('|').map(s => s.trim()).filter(Boolean).map(s => `<div style="margin-bottom:3px">· ${s}</div>`).join('');
+    scenDiv.innerHTML = `
+      <div class="cp-scenario-card">
+        <div class="cp-scenario-title">Status Quo</div>
+        <div class="cp-scenario-cost">${sq.total_cost || '—'}</div>
+        <div class="cp-scenario-desc">${sq.description || ''}</div>
+        <div class="cp-scenario-outcomes">${renderOutcomes(sq.outcomes)}</div>
+      </div>
+      <div class="cp-scenario-card">
+        <div class="cp-scenario-title" style="color:#27500A">Optimized Investment</div>
+        <div class="cp-scenario-cost">${opt.total_cost || '—'}</div>
+        <div class="cp-scenario-desc">${opt.description || ''}</div>
+        <div class="cp-scenario-outcomes">${renderOutcomes(opt.outcomes)}</div>
+      </div>`;
+  } else {
+    scenDiv.innerHTML = '';
+  }
+
+  // Narrative
+  const narDiv = document.getElementById('cpNarrative');
+  narDiv.textContent = plan.narrative || '';
+
+  // Results label
+  document.getElementById('cpResultsLabel').textContent = `${cpHorizon}-year capital plan generated`;
+}
+
 async function generateCapitalPlan() {
   const text = document.getElementById('cpIssues').value.trim();
   const budget = document.getElementById('cpBudget').value.trim();
