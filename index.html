@@ -5,6 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Infrastructure Issue Prioritizer</title>
 <style>
+/* --- Button Group --- */
+.btn-group { display: flex; gap: 0; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); overflow: hidden; width: fit-content; }
+.btn-group-item { background: transparent; border: none; border-right: 0.5px solid var(--color-border-secondary); padding: 7px 16px; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; font-family: var(--font-sans); transition: background 0.12s, color 0.12s; }
+.btn-group-item:last-child { border-right: none; }
+.btn-group-item:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+.btn-group-item.active { background: var(--color-text-primary); color: var(--color-background-primary); }
+.form-field { margin-bottom: 1rem; }
+.form-label { display: block; font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 6px; }
+.form-label-sub { font-size: 12px; color: var(--color-text-secondary); font-weight: 400; margin-left: 4px; }
+input[type="number"], input[type="text"] { width: 100%; font-size: 14px; padding: 9px 12px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); font-family: var(--font-sans); }
+input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: #378ADD; box-shadow: 0 0 0 2px rgba(55,138,221,0.12); }
+input[type="number"]::placeholder, input[type="text"]::placeholder { color: var(--color-text-tertiary); }
+/* --- Capital Planning Output --- */
+.cp-table-wrap { overflow-x: auto; margin-bottom: 1.25rem; }
+.cp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-table th { background: var(--color-background-secondary); color: var(--color-text-secondary); font-weight: 500; text-align: left; padding: 8px 12px; border-bottom: 0.5px solid var(--color-border-secondary); }
+.cp-table td { padding: 10px 12px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); vertical-align: top; }
+.cp-table tr:last-child td { border-bottom: none; }
+.cp-scenarios { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+@media (max-width: 540px) { .cp-scenarios { grid-template-columns: 1fr; } }
+.cp-scenario-card { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+.cp-scenario-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+.cp-scenario-cost { font-size: 22px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+.cp-scenario-desc { font-size: 13px; color: var(--color-text-secondary); line-height: 1.5; margin-bottom: 6px; }
+.cp-scenario-outcomes { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+.cp-narrative { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px 16px; font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
+.cp-section-label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+/* --- Tab Navigation --- */
+.tab-nav { display: flex; gap: 2px; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--color-border-tertiary); padding-bottom: 0; }
+.tab-btn { background: transparent; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; font-family: var(--font-sans); margin-bottom: -0.5px; transition: color 0.15s; }
+.tab-btn:hover { color: var(--color-text-primary); }
+.tab-btn.active { color: var(--color-text-primary); border-bottom-color: var(--color-text-primary); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --color-background-primary: #ffffff;
@@ -104,6 +139,13 @@ textarea::placeholder { color: var(--color-text-tertiary); }
     <p>Paste city infrastructure complaints below. The AI ranks them by urgency, estimated cost, and impact.</p>
   </div>
 
+  <nav class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('prioritizer')">Issue Prioritizer</button>
+    <button class="tab-btn" onclick="switchTab('capital-planning')">Capital Planning</button>
+  </nav>
+
+  <div id="tab-prioritizer" class="tab-panel active">
+
   <textarea id="input" placeholder="e.g.&#10;- Large pothole on Main St causing flat tires&#10;- Streetlight out on Oak Ave for 3 weeks&#10;- Water main leak reported at 4th and Park&#10;- Sidewalk crack near elementary school entrance&#10;- Bridge deck showing surface corrosion on Route 9"></textarea>
 
   <div class="controls">
@@ -127,6 +169,69 @@ textarea::placeholder { color: var(--color-text-tertiary); }
     <div id="issuesList"></div>
   </div>
 
+  </div><!-- end #tab-prioritizer -->
+
+  <div id="tab-capital-planning" class="tab-panel">
+
+    <div class="form-field">
+      <label class="form-label" for="cpIssues">Infrastructure Issues <span class="form-label-sub">— paste issues or use analyzed results above</span></label>
+      <textarea id="cpIssues" placeholder="Paste infrastructure issues or copy the analyzed results from the Issue Prioritizer tab..."></textarea>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">Planning Horizon</label>
+      <div class="btn-group" id="cpHorizonGroup">
+        <button class="btn-group-item active" onclick="setCpHorizon(3, this)">3 years</button>
+        <button class="btn-group-item" onclick="setCpHorizon(5, this)">5 years</button>
+        <button class="btn-group-item" onclick="setCpHorizon(10, this)">10 years</button>
+      </div>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label" for="cpBudget">Annual Budget Cap ($)</label>
+      <input type="number" id="cpBudget" placeholder="e.g. 500000" min="0" step="10000">
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" id="cpBtn" onclick="generateCapitalPlan()">Generate Capital Plan</button>
+    </div>
+
+    <div class="loading" id="cpLoading">
+      <div class="spinner"></div>
+      <span id="cpLoadingText">Forecasting asset deterioration...</span>
+    </div>
+
+    <div class="error-msg" id="cpErrorMsg"></div>
+
+    <div class="results" id="cpResults">
+      <div class="results-header">
+        <span id="cpResultsLabel"></span>
+      </div>
+
+      <div class="cp-section-label">Year-by-Year Capital Plan</div>
+      <div class="cp-table-wrap">
+        <table class="cp-table" id="cpTable">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Priority Issues</th>
+              <th>Budget Allocated</th>
+              <th>Rationale</th>
+            </tr>
+          </thead>
+          <tbody id="cpTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="cp-section-label">Scenario Comparison</div>
+      <div class="cp-scenarios" id="cpScenarios"></div>
+
+      <div class="cp-section-label">Narrative Justification</div>
+      <div class="cp-narrative" id="cpNarrative"></div>
+    </div>
+
+  </div>
+
   <div class="footer">
     <span>Built by Cauã Victor · UNC Chapel Hill CS/Economics</span>
     <span>@2026</span>
@@ -134,6 +239,13 @@ textarea::placeholder { color: var(--color-text-tertiary); }
 </div>
 
 <script>
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
+}
+
 const EXAMPLES = `- Large pothole on Main St near downtown causing flat tires daily
 - Streetlight out on Oak Ave for 3 weeks, reported multiple times
 - Water main leak at intersection of 4th and Park Ave, active seepage
@@ -143,6 +255,13 @@ const EXAMPLES = `- Large pothole on Main St near downtown causing flat tires da
 - Guardrail missing on curve on Highway 7 near mile marker 14`;
 
 let lastResults = [];
+let cpHorizon = 3;
+
+function setCpHorizon(years, btn) {
+  cpHorizon = years;
+  document.querySelectorAll('#cpHorizonGroup .btn-group-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
 
 function loadExample() {
   document.getElementById('input').value = EXAMPLES;
@@ -223,6 +342,154 @@ function exportCSV() {
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'infrastructure_priorities.csv'; a.click();
+}
+
+function renderCapitalPlan(plan) {
+  // Year-by-year table
+  const tbody = document.getElementById('cpTableBody');
+  if (plan.years && Array.isArray(plan.years)) {
+    tbody.innerHTML = plan.years.map(row => `
+      <tr>
+        <td><strong>Year ${row.year}</strong></td>
+        <td>${row.issues || ''}</td>
+        <td>${row.budget_allocated || ''}</td>
+        <td>${row.rationale || ''}</td>
+      </tr>`).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-tertiary)">No year data returned.</td></tr>';
+  }
+
+  // Scenario comparison cards
+  const scenDiv = document.getElementById('cpScenarios');
+  if (plan.scenarios) {
+    const sq = plan.scenarios.status_quo || {};
+    const opt = plan.scenarios.optimized || {};
+    const renderOutcomes = (str) => (str || '').split('|').map(s => s.trim()).filter(Boolean).map(s => `<div style="margin-bottom:3px">· ${s}</div>`).join('');
+    scenDiv.innerHTML = `
+      <div class="cp-scenario-card">
+        <div class="cp-scenario-title">Status Quo</div>
+        <div class="cp-scenario-cost">${sq.total_cost || '—'}</div>
+        <div class="cp-scenario-desc">${sq.description || ''}</div>
+        <div class="cp-scenario-outcomes">${renderOutcomes(sq.outcomes)}</div>
+      </div>
+      <div class="cp-scenario-card">
+        <div class="cp-scenario-title" style="color:#27500A">Optimized Investment</div>
+        <div class="cp-scenario-cost">${opt.total_cost || '—'}</div>
+        <div class="cp-scenario-desc">${opt.description || ''}</div>
+        <div class="cp-scenario-outcomes">${renderOutcomes(opt.outcomes)}</div>
+      </div>`;
+  } else {
+    scenDiv.innerHTML = '';
+  }
+
+  // Narrative
+  const narDiv = document.getElementById('cpNarrative');
+  narDiv.textContent = plan.narrative || '';
+
+  // Results label
+  document.getElementById('cpResultsLabel').textContent = `${cpHorizon}-year capital plan generated`;
+}
+
+async function generateCapitalPlan() {
+  const text = document.getElementById('cpIssues').value.trim();
+  const budget = document.getElementById('cpBudget').value.trim();
+  if (!text) {
+    const e = document.getElementById('cpErrorMsg');
+    e.textContent = 'Please paste infrastructure issues before generating a capital plan.';
+    e.classList.add('active');
+    return;
+  }
+
+  const btn = document.getElementById('cpBtn');
+  const loading = document.getElementById('cpLoading');
+  const results = document.getElementById('cpResults');
+  const errorMsg = document.getElementById('cpErrorMsg');
+
+  btn.disabled = true;
+  loading.classList.add('active');
+  results.classList.remove('active');
+  errorMsg.classList.remove('active');
+
+  const loadingTexts = [
+    'Forecasting asset deterioration...',
+    'Calculating optimal intervention timing...',
+    'Allocating budget across years...',
+    'Running scenario analysis...',
+    'Generating narrative justification...'
+  ];
+  let li = 0;
+  const interval = setInterval(() => {
+    li = (li + 1) % loadingTexts.length;
+    document.getElementById('cpLoadingText').textContent = loadingTexts[li];
+  }, 2000);
+
+  const budgetLine = budget ? `Annual budget cap: $${Number(budget).toLocaleString()}` : 'No strict annual budget cap specified.';
+
+  const prompt = `You are a municipal infrastructure capital planning expert. Based on the infrastructure issues below, generate a ${cpHorizon}-year capital plan.
+
+${budgetLine}
+Planning horizon: ${cpHorizon} years
+
+Your tasks:
+1. Forecast condition deterioration per asset class (roads, bridges, water, drainage, electrical, sidewalks) over the ${cpHorizon}-year horizon.
+2. Calculate optimal intervention timing to maximize asset lifespan and minimize total lifecycle cost — factor in that deferred maintenance compounds costs.
+3. Generate a multi-year capital plan allocating budget across years, prioritizing by risk, compliance, and cost-efficiency.
+4. Produce a scenario analysis comparing "Status Quo" (no new investment beyond bare minimum) vs "Optimized Investment" (your recommended plan).
+5. Write a narrative justification for the major decisions in the plan.
+
+Return ONLY a valid JSON object with exactly these keys (no markdown, no extra text):
+{
+  "years": [
+    {
+      "year": 1,
+      "issues": "comma-separated list of priority issues addressed this year",
+      "budget_allocated": "$XXX,XXX",
+      "rationale": "one to two sentence explanation of why these issues are addressed this year"
+    }
+  ],
+  "scenarios": {
+    "status_quo": {
+      "description": "what happens if the city continues with minimal investment",
+      "total_cost": "$X.XM over ${cpHorizon} years",
+      "outcomes": "bullet-point outcomes separated by | character"
+    },
+    "optimized": {
+      "description": "what happens under the recommended capital plan",
+      "total_cost": "$X.XM over ${cpHorizon} years",
+      "outcomes": "bullet-point outcomes separated by | character"
+    }
+  },
+  "narrative": "two to three paragraph narrative justification of the capital plan decisions, asset prioritization rationale, and expected community impact"
+}
+
+Infrastructure issues:
+${text}`;
+
+  try {
+    const res = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    const data = await res.json();
+    clearInterval(interval);
+
+    if (!res.ok) throw new Error(data.error?.message || 'API error');
+
+    const raw = data.choices[0].message.content.replace(/```json|```/g, '').trim();
+    const plan = JSON.parse(raw);
+
+    renderCapitalPlan(plan);
+    results.classList.add('active');
+  } catch (err) {
+    clearInterval(interval);
+    errorMsg.textContent = 'Capital plan generation failed: ' + err.message;
+    errorMsg.classList.add('active');
+  } finally {
+    loading.classList.remove('active');
+    btn.disabled = false;
+  }
 }
 
 async function analyze() {
