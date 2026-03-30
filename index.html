@@ -344,6 +344,108 @@ function exportCSV() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'infrastructure_priorities.csv'; a.click();
 }
 
+async function generateCapitalPlan() {
+  const text = document.getElementById('cpIssues').value.trim();
+  const budget = document.getElementById('cpBudget').value.trim();
+  if (!text) {
+    const e = document.getElementById('cpErrorMsg');
+    e.textContent = 'Please paste infrastructure issues before generating a capital plan.';
+    e.classList.add('active');
+    return;
+  }
+
+  const btn = document.getElementById('cpBtn');
+  const loading = document.getElementById('cpLoading');
+  const results = document.getElementById('cpResults');
+  const errorMsg = document.getElementById('cpErrorMsg');
+
+  btn.disabled = true;
+  loading.classList.add('active');
+  results.classList.remove('active');
+  errorMsg.classList.remove('active');
+
+  const loadingTexts = [
+    'Forecasting asset deterioration...',
+    'Calculating optimal intervention timing...',
+    'Allocating budget across years...',
+    'Running scenario analysis...',
+    'Generating narrative justification...'
+  ];
+  let li = 0;
+  const interval = setInterval(() => {
+    li = (li + 1) % loadingTexts.length;
+    document.getElementById('cpLoadingText').textContent = loadingTexts[li];
+  }, 2000);
+
+  const budgetLine = budget ? `Annual budget cap: $${Number(budget).toLocaleString()}` : 'No strict annual budget cap specified.';
+
+  const prompt = `You are a municipal infrastructure capital planning expert. Based on the infrastructure issues below, generate a ${cpHorizon}-year capital plan.
+
+${budgetLine}
+Planning horizon: ${cpHorizon} years
+
+Your tasks:
+1. Forecast condition deterioration per asset class (roads, bridges, water, drainage, electrical, sidewalks) over the ${cpHorizon}-year horizon.
+2. Calculate optimal intervention timing to maximize asset lifespan and minimize total lifecycle cost — factor in that deferred maintenance compounds costs.
+3. Generate a multi-year capital plan allocating budget across years, prioritizing by risk, compliance, and cost-efficiency.
+4. Produce a scenario analysis comparing "Status Quo" (no new investment beyond bare minimum) vs "Optimized Investment" (your recommended plan).
+5. Write a narrative justification for the major decisions in the plan.
+
+Return ONLY a valid JSON object with exactly these keys (no markdown, no extra text):
+{
+  "years": [
+    {
+      "year": 1,
+      "issues": "comma-separated list of priority issues addressed this year",
+      "budget_allocated": "$XXX,XXX",
+      "rationale": "one to two sentence explanation of why these issues are addressed this year"
+    }
+  ],
+  "scenarios": {
+    "status_quo": {
+      "description": "what happens if the city continues with minimal investment",
+      "total_cost": "$X.XM over ${cpHorizon} years",
+      "outcomes": "bullet-point outcomes separated by | character"
+    },
+    "optimized": {
+      "description": "what happens under the recommended capital plan",
+      "total_cost": "$X.XM over ${cpHorizon} years",
+      "outcomes": "bullet-point outcomes separated by | character"
+    }
+  },
+  "narrative": "two to three paragraph narrative justification of the capital plan decisions, asset prioritization rationale, and expected community impact"
+}
+
+Infrastructure issues:
+${text}`;
+
+  try {
+    const res = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    const data = await res.json();
+    clearInterval(interval);
+
+    if (!res.ok) throw new Error(data.error?.message || 'API error');
+
+    const raw = data.choices[0].message.content.replace(/```json|```/g, '').trim();
+    const plan = JSON.parse(raw);
+
+    renderCapitalPlan(plan);
+    results.classList.add('active');
+  } catch (err) {
+    clearInterval(interval);
+    errorMsg.textContent = 'Capital plan generation failed: ' + err.message;
+    errorMsg.classList.add('active');
+  } finally {
+    loading.classList.remove('active');
+    btn.disabled = false;
+  }
+}
+
 async function analyze() {
   const text = document.getElementById('input').value.trim();
   if (!text) return;
