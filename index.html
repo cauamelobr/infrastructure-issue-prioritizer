@@ -140,6 +140,17 @@ textarea::placeholder { color: var(--color-text-tertiary); }
 .export-btn { font-size: 12px; color: var(--color-text-secondary); background: transparent; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 5px 10px; cursor: pointer; font-family: var(--font-sans); }
 .export-btn:hover { background: var(--color-background-secondary); }
 .footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 0.5px solid var(--color-border-tertiary); font-size: 12px; color: var(--color-text-tertiary); display: flex; justify-content: space-between; align-items: center; }
+.cyvl-picker { display: none; margin-top: 10px; background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+.cyvl-picker.active { display: block; }
+.cyvl-picker-label { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.cyvl-city-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.cyvl-city-btn { background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; font-size: 13px; cursor: pointer; font-family: var(--font-sans); color: var(--color-text-primary); text-align: left; transition: border-color 0.12s, color 0.12s; }
+.cyvl-city-btn:hover:not(:disabled) { border-color: #378ADD; color: #378ADD; }
+.cyvl-city-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cyvl-city-btn .city-name { font-weight: 500; display: block; }
+.cyvl-city-btn .city-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; display: block; }
+.cyvl-fetch-loading { display: none; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-secondary); margin-top: 12px; }
+.cyvl-fetch-loading.active { display: flex; }
 </style>
 </head>
 <body>
@@ -164,6 +175,37 @@ textarea::placeholder { color: var(--color-text-tertiary); }
     <div class="controls">
       <button class="btn-primary" id="analyzeBtn" onclick="analyze()">Analyze issues</button>
       <button class="btn-secondary" onclick="loadExample()">Load example</button>
+      <button class="btn-secondary" onclick="toggleCyvlPicker()">Load Cyvl data ▾</button>
+    </div>
+
+    <div class="cyvl-picker" id="cyvlPicker">
+      <div class="cyvl-picker-label">Real data · Cyvl Open Data · ODbL License</div>
+      <div class="cyvl-city-grid">
+        <button class="cyvl-city-btn" onclick="loadCyvlData('beverly_data', this)">
+          <span class="city-name">Beverly, MA</span>
+          <span class="city-meta">168 mi · PCI + distresses</span>
+        </button>
+        <button class="cyvl-city-btn" onclick="loadCyvlData('brookline_data', this)">
+          <span class="city-name">Brookline, MA</span>
+          <span class="city-meta">100 mi · PCI scores</span>
+        </button>
+        <button class="cyvl-city-btn" onclick="loadCyvlData('green_bay_data', this)">
+          <span class="city-name">Green Bay, WI</span>
+          <span class="city-meta">527 mi · distresses</span>
+        </button>
+        <button class="cyvl-city-btn" onclick="loadCyvlData('kittleson_corridor', this)">
+          <span class="city-name">Jamaica Plain, MA</span>
+          <span class="city-meta">1.5 mi · detailed scan</span>
+        </button>
+        <button class="cyvl-city-btn" onclick="loadCyvlData('oswego_ny_data', this)">
+          <span class="city-name">Oswego, NY</span>
+          <span class="city-meta">96.5 mi · PCI + distresses</span>
+        </button>
+      </div>
+      <div class="cyvl-fetch-loading" id="cyvlFetchLoading">
+        <div class="spinner"></div>
+        <span id="cyvlFetchText">Fetching real infrastructure data...</span>
+      </div>
     </div>
 
     <div class="loading" id="loading">
@@ -600,6 +642,133 @@ ${text}`;
     loading.classList.remove('active');
     btn.disabled = false;
   }
+}
+
+// ── Cyvl Real Data ──
+
+const CYVL_BASE = 'https://dcygqrjfsypox.cloudfront.net/cyvl_public_data/11_2025';
+
+const CYVL_CITIES = {
+  beverly_data:       { name: 'Beverly, MA',      hasDistresses: true,  hasRollup: true  },
+  brookline_data:     { name: 'Brookline, MA',     hasDistresses: false, hasRollup: true  },
+  green_bay_data:     { name: 'Green Bay, WI',     hasDistresses: true,  hasRollup: true  },
+  kittleson_corridor: { name: 'Jamaica Plain, MA', hasDistresses: true,  hasRollup: false },
+  oswego_ny_data:     { name: 'Oswego, NY',        hasDistresses: true,  hasRollup: true  },
+};
+
+const DISTRESS_LABELS = {
+  potholes: 'Pothole', raveling: 'Raveling/surface deterioration',
+  bleeding_flushing: 'Bleeding/flushing', lt_cracking: 'Longitudinal cracking',
+  depressions: 'Pavement depression', rutting: 'Rutting', sealant: 'Sealant failure',
+  block_cracking: 'Block cracking', weathering: 'Surface weathering',
+  edge_cracking: 'Edge cracking', alligator_cracking: 'Alligator (fatigue) cracking',
+  longitudinal_cracking: 'Longitudinal cracking', transverse_cracking: 'Transverse cracking',
+  patches: 'Failed patch',
+};
+
+function toggleCyvlPicker() {
+  document.getElementById('cyvlPicker').classList.toggle('active');
+}
+
+function formatDistresses(features, cityName) {
+  const SEV_ORDER = { high: 0, medium: 1, low: 2 };
+  const sorted = features
+    .filter(f => f.properties)
+    .sort((a, b) => (SEV_ORDER[a.properties.severity] ?? 3) - (SEV_ORDER[b.properties.severity] ?? 3));
+
+  const seen = new Set();
+  const deduped = [];
+  for (const f of sorted) {
+    const p = f.properties;
+    const key = `${p.distress_type}|${p.address_st}|${p.severity}`;
+    if (!seen.has(key)) { seen.add(key); deduped.push(p); }
+    if (deduped.length >= 30) break;
+  }
+
+  const lines = deduped.map(p => {
+    const type = DISTRESS_LABELS[p.distress_type] || p.distress_type;
+    const sev = p.severity ? p.severity.charAt(0).toUpperCase() + p.severity.slice(1) : '';
+    const loc = p.address_st ? ` on ${p.address_st}` : '';
+    const area = p.area_sq_ft ? ` (${Math.round(p.area_sq_ft)} sq ft)` : '';
+    return `- [${sev} severity] ${type}${loc}${area}`;
+  });
+
+  return `Real pavement distresses — ${cityName} (Data © Cyvl Inc., ODbL)\n\n` + lines.join('\n');
+}
+
+function appendRollup(features, cityName, existing) {
+  const worst = features
+    .filter(f => f.properties && f.properties.score != null && f.properties.score < 50)
+    .sort((a, b) => a.properties.score - b.properties.score)
+    .slice(0, 10);
+
+  if (!worst.length) return existing;
+
+  const lines = worst.map(f => {
+    const p = f.properties;
+    return `- ${p.label || 'Poor'} road on ${p.client_seg || 'unnamed segment'} (PCI: ${Math.round(p.score)}/100)`;
+  });
+
+  const rollupBlock = `\n\n[Worst-rated streets by PCI — ${cityName}]\n` + lines.join('\n');
+  return existing
+    ? existing + rollupBlock
+    : `Road condition data — ${cityName} (Data © Cyvl Inc., ODbL)` + rollupBlock;
+}
+
+async function loadCyvlData(cityKey) {
+  const city = CYVL_CITIES[cityKey];
+  if (!city) return;
+
+  const loading = document.getElementById('cyvlFetchLoading');
+  const loadingText = document.getElementById('cyvlFetchText');
+  const cityBtns = document.querySelectorAll('.cyvl-city-btn');
+
+  cityBtns.forEach(b => b.disabled = true);
+  loading.classList.add('active');
+  loadingText.textContent = `Fetching ${city.name} data...`;
+
+  try {
+    const fetches = [];
+    if (city.hasDistresses) fetches.push(
+      fetch(`${CYVL_BASE}/${cityKey}/gis/pavement/distresses.geojson`)
+        .then(r => r.json()).then(d => ({ type: 'distresses', data: d })).catch(() => null)
+    );
+    if (city.hasRollup) fetches.push(
+      fetch(`${CYVL_BASE}/${cityKey}/gis/pavement/rollup.geojson`)
+        .then(r => r.json()).then(d => ({ type: 'rollup', data: d })).catch(() => null)
+    );
+
+    const results = await Promise.all(fetches);
+
+    let text = '';
+    const distressResult = results.find(r => r?.type === 'distresses');
+    const rollupResult = results.find(r => r?.type === 'rollup');
+
+    if (distressResult?.data?.features?.length) {
+      text = formatDistresses(distressResult.data.features, city.name);
+    }
+    if (rollupResult?.data?.features?.length) {
+      text = appendRollup(rollupResult.data.features, city.name, text);
+    }
+
+    if (text) {
+      document.getElementById('input').value = text;
+      document.getElementById('cyvlPicker').classList.remove('active');
+    } else {
+      loadingText.textContent = 'No pavement data available for this city. Try another.';
+      setTimeout(() => loading.classList.remove('active'), 2500);
+      cityBtns.forEach(b => b.disabled = false);
+      return;
+    }
+  } catch (err) {
+    loadingText.textContent = 'Failed to load: ' + err.message;
+    setTimeout(() => loading.classList.remove('active'), 2500);
+    cityBtns.forEach(b => b.disabled = false);
+    return;
+  }
+
+  loading.classList.remove('active');
+  cityBtns.forEach(b => b.disabled = false);
 }
 
 // ── Issue Prioritizer ──
